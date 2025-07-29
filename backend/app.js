@@ -1,61 +1,17 @@
-const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 3001 });
-const users = new Map();
+const express = require('express');
+const app = express();
+const userRouter = require('./routes/users');
+const cors = require('cors');
+const corsOptions = require('./middleeware/allowedOrigin');
 
-wss.on('connection', (ws) => {
-  ws.on('message', (msg) => {
-    let data;
-    try {
-      data = JSON.parse(msg);
-    } catch (e) {
-      return;
-    }
-
-    switch (data.type) {
-      case 'login':
-        if ([...users.keys()].includes(data.name)) {
-          sendTo(ws, { type: 'login', success: false });
-        } else {
-          ws.name = data.name;
-          users.set(data.name, ws);
-          sendTo(ws, { type: 'login', success: true, users: [...users.keys()] });
-          broadcast({ type: 'new-user', name: data.name }, ws);
-        }
-        break;
-
-      case 'call':
-      case 'offer':
-      case 'answer':
-      case 'candidate':
-      case 'accept':
-      case 'reject':
-        const target = users.get(data.target);
-        if (target) sendTo(target, { ...data, from: ws.name });
-        break;
-
-      case 'leave':
-        users.delete(ws.name);
-        broadcast({ type: 'user-left', name: ws.name });
-        break;
-    }
-  });
-
-  ws.on('close', () => {
-    if (ws.name) {
-      users.delete(ws.name);
-      broadcast({ type: 'user-left', name: ws.name });
-    }
-  });
+app.use(express.json());
+app.use(cors(corsOptions));
+app.get('/', (req, res) => {
+  res.send('Welcome to the Call Center');
 });
+app.use('', userRouter);
 
-function sendTo(conn, msg) {
-  conn.send(JSON.stringify(msg));
-}
-
-function broadcast(msg, except) {
-  users.forEach((ws) => {
-    if (ws !== except) sendTo(ws, msg);
-  });
-}
-
-console.log("WebSocket server started on ws://localhost:3001");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Serveur API démarré sur http://localhost:${PORT}`)
+});
